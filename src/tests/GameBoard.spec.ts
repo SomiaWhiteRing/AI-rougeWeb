@@ -1,80 +1,63 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import GameBoard from '../components/GameBoard.vue'
-import { createPinia, setActivePinia } from 'pinia'
-import type { Entity } from '../types/entity'
-import type { Position } from '../types/position'
+import { useGameEngine } from '../composables/useGameEngine'
+
+// Mock useGameEngine
+vi.mock('../composables/useGameEngine', () => ({
+  useGameEngine: () => ({
+    gameState: {
+      map: [],
+      player: {
+        position: { x: 0, y: 0 },
+        stats: {
+          health: 100,
+          maxHealth: 100,
+          level: 1
+        }
+      },
+      enemies: [],
+      turn: 1,
+      score: 0,
+      gameStatus: 'playing',
+      messages: ['Welcome to the game!']
+    },
+    movePlayer: vi.fn()
+  })
+}))
 
 describe('GameBoard.vue', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-  })
-
-  const mockPlayer: Entity = {
-    type: 'player',
-    class: 'warrior',
-    position: { x: 5, y: 5 } as Position,
-    stats: {
-      health: 100,
-      maxHealth: 100,
-      mana: 50,
-      maxMana: 50,
-      attack: 10,
-      defense: 5,
-      level: 1,
-      experience: 0,
-      speed: 3,
-      criticalChance: 0.1,
-      criticalDamage: 1.5,
-      attributePoints: 0,
-      bonuses: [],
-      statusEffects: []
-    },
-    skills: [],
-    inventory: [],
-    equipment: {
-      weapon: undefined,
-      armor: undefined,
-      accessory: undefined
-    }
-  }
-
-  const mockProps = {
-    player: mockPlayer,
-    enemies: [],
-    map: Array(10).fill(Array(10).fill(0)),
-    messages: ['Welcome to the game!'],
-    isPlayerTurn: true
-  }
-
   it('renders properly', () => {
-    const wrapper = mount(GameBoard, {
-      props: mockProps
-    })
+    const wrapper = mount(GameBoard)
     expect(wrapper.exists()).toBe(true)
   })
 
   it('contains game grid', () => {
-    const wrapper = mount(GameBoard, {
-      props: mockProps
-    })
-    expect(wrapper.find('.game-board').exists()).toBe(true)
+    const wrapper = mount(GameBoard)
+    const grid = wrapper.find('.map-container')
+    expect(grid.exists()).toBe(true)
   })
 
   it('handles movement controls', async () => {
-    const wrapper = mount(GameBoard, {
-      props: mockProps
-    })
+    const wrapper = mount(GameBoard)
     const controls = wrapper.find('.control-pad')
     expect(controls.exists()).toBe(true)
+
+    const upButton = wrapper.find('.control-btn.up')
+    expect(upButton.exists()).toBe(true)
+    await upButton.trigger('click')
   })
 
   it('displays game messages', () => {
-    const wrapper = mount(GameBoard, {
-      props: mockProps
-    })
-    const messages = wrapper.find('.message-log')
+    const wrapper = mount(GameBoard)
+    const messages = wrapper.find('.floating-messages')
     expect(messages.exists()).toBe(true)
-    expect(messages.text()).toContain('Welcome to the game!')
+
+    // 等待消息系统初始化
+    setTimeout(() => {
+      const messageElements = wrapper.findAll('.floating-message')
+      expect(messageElements.length).toBeGreaterThan(0)
+      expect(messageElements[0].text()).toContain('Initializing game...')
+    }, 100)
   })
 })

@@ -12,7 +12,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import MainMenu from './components/MainMenu.vue'
 import GameBoard from './components/GameBoard.vue'
 import { useGameEngine } from './composables/useGameEngine'
@@ -21,20 +21,59 @@ import type { CharacterClass } from './types/entity'
 const isPlaying = ref(false)
 const { gameState, hasSaveData, loadGame, initGame, deleteSaveData } = useGameEngine()
 
-const continueGame = () => {
+const continueGame = async () => {
+  isPlaying.value = false // 重置状态
+
   if (loadGame()) {
-    isPlaying.value = true
+    // 确保存档数据有效
+    if (gameState.map.length > 0) {
+      await nextTick()
+      isPlaying.value = true
+    } else {
+      console.error('Invalid save data: map not found')
+    }
   }
 }
 
-const startNewGame = (characterClass: CharacterClass) => {
-  initGame(characterClass)
-  isPlaying.value = true
+const startNewGame = async (characterClass: CharacterClass) => {
+  console.log('Starting new game with class:', characterClass)
+  isPlaying.value = false // 重置状态
+
+  const success = await initGame(characterClass)
+  console.log('Game initialized, current state:', {
+    success,
+    mapSize: gameState.map.length,
+    playerPos: gameState.player.position,
+    enemies: gameState.enemies.length
+  })
+
+  // 确保地图已经生成
+  if (success && gameState.map.length > 0) {
+    // 等待下一个tick确保状态已完全更新
+    await nextTick()
+    isPlaying.value = true
+  } else {
+    console.error('Failed to initialize game: map not generated')
+  }
 }
 
 const handleDeleteSave = () => {
   deleteSaveData()
 }
+
+// 监听游戏状态
+watch(
+  () => gameState,
+  newState => {
+    console.log('Game state changed:', {
+      mapSize: newState.map.length,
+      mapValid: newState.map.length > 0 && newState.map[0]?.length > 0,
+      playerPos: newState.player.position,
+      status: newState.gameStatus
+    })
+  },
+  { deep: true }
+)
 </script>
 
 <style>

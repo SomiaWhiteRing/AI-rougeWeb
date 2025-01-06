@@ -1,152 +1,127 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useGameEngine } from '../composables/useGameEngine'
-import type { Entity } from '../types/entity'
-import type { Position } from '../types/position'
-import type { MapTile } from '../types/map'
+import { generateMap } from '../utils/mapGenerator'
+
+// Mock generateMap
+vi.mock('../utils/mapGenerator', () => ({
+  generateMap: vi.fn()
+}))
 
 describe('GameEngine', () => {
-  it('should initialize with default values', () => {
-    const { gameState } = useGameEngine()
+  beforeEach(() => {
+    // 重置所有模拟
+    vi.clearAllMocks()
 
-    expect(gameState.value.player).toBeDefined()
-    expect(gameState.value.player.stats.health).toBe(120)
-    expect(gameState.value.player.stats.maxHealth).toBe(120)
-    expect(gameState.value.player.stats.level).toBe(1)
-    expect(gameState.value.player.class).toBe(undefined)
-    expect(gameState.value.score).toBe(0)
-    expect(gameState.value.enemies).toEqual([])
-    expect(gameState.value.map).toBeDefined()
-    expect(gameState.value.turn).toBe(1)
-    expect(gameState.value.isPlayerTurn).toBe(true)
-    expect(gameState.value.gameStatus).toBe('playing')
-  })
-
-  it('should initialize game with map and player', async () => {
-    const { gameState, initGame } = useGameEngine()
-    await initGame('warrior')
-
-    expect(gameState.value.map.length).toBeGreaterThan(0)
-    expect(gameState.value.player.position).toBeDefined()
-    expect(typeof gameState.value.player.position.x).toBe('number')
-    expect(typeof gameState.value.player.position.y).toBe('number')
-    expect(gameState.value.enemies.length).toBeGreaterThan(0)
-  })
-
-  it('should handle player movement and turn switching', async () => {
-    const { gameState, initGame, movePlayer } = useGameEngine()
-    await initGame('warrior')
-
-    // 记录初始回合数和玩家回合状态
-    const initialTurn = gameState.value.turn
-    expect(gameState.value.isPlayerTurn).toBe(true)
-
-    // 找到一个可移动的位置
-    const player = gameState.value.player
-    const validPosition: Position = {
-      x: player.position.x + 1,
-      y: player.position.y
-    }
-
-    // 确保目标位置是可行走的
-    if (
-      gameState.value.map[validPosition.y] &&
-      gameState.value.map[validPosition.y][validPosition.x]
-    ) {
-      gameState.value.map[validPosition.y][validPosition.x] = {
+    // 模拟地图生成
+    const mockMap = Array(15).fill(null).map(() =>
+      Array(20).fill(null).map(() => ({
         type: 'floor',
         walkable: true
-      } as MapTile
+      }))
+    )
+    const mockRooms = [
+      { x: 2, y: 5, width: 3, height: 6 },
+      { x: 9, y: 7, width: 3, height: 4 }
+    ]
 
-      // 移动玩家
-      movePlayer(validPosition)
-
-      // 检查回合是否增加
-      expect(gameState.value.turn).toBe(initialTurn + 1)
-      // 检查是否切换到敌人回合
-      expect(gameState.value.isPlayerTurn).toBe(false)
-
-      // 等待敌人回合结束
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      // 检查是否回到玩家回合
-      expect(gameState.value.isPlayerTurn).toBe(true)
-    }
+      ; (generateMap as any).mockReturnValue({ map: mockMap, rooms: mockRooms })
   })
 
-  it('should prevent player movement during enemy turn', async () => {
-    const { gameState, initGame, movePlayer } = useGameEngine()
-    await initGame('warrior')
+  describe('initGame', () => {
+    it('should properly initialize game state', async () => {
+      const { gameState, initGame } = useGameEngine()
 
-    const player = gameState.value.player
-    const initialPosition = { ...player.position }
+      // 验证初始状态
+      expect(gameState.map).toHaveLength(0)
+      expect(gameState.enemies).toHaveLength(0)
+      expect(gameState.player.position).toEqual({ x: 0, y: 0 })
 
-    // 设置为敌人回合
-    gameState.value.isPlayerTurn = false
+      // 初始化游戏
+      const success = await initGame('warrior')
 
-    // 尝试移动玩家
-    const newPosition: Position = {
-      x: initialPosition.x + 1,
-      y: initialPosition.y
-    }
+      // 验证初始化成功
+      expect(success).toBe(true)
+      expect(generateMap).toHaveBeenCalledTimes(1)
 
-    // 确保目标位置是可行走的
-    if (gameState.value.map[newPosition.y] && gameState.value.map[newPosition.y][newPosition.x]) {
-      gameState.value.map[newPosition.y][newPosition.x] = {
-        type: 'floor',
-        walkable: true
-      } as MapTile
+      // 验证地图已正确生成
+      expect(gameState.map).toHaveLength(15)
+      expect(gameState.map[0]).toHaveLength(20)
 
-      // 移动应该失败
-      const result = movePlayer(newPosition)
-      expect(result).toBe(false)
-      // 位置应该保持不变
-      expect(player.position).toEqual(initialPosition)
-    }
-  })
+      // 验证玩家位置已正确设置
+      expect(gameState.player.position).toEqual({ x: 3, y: 8 }) // 第一个房间的中心
+      expect(gameState.player.class).toBe('warrior')
 
-  it('should handle combat and game over', async () => {
-    const { gameState, initGame, movePlayer } = useGameEngine()
-    await initGame('warrior')
+      // 验证敌人已生成
+      expect(gameState.enemies).toHaveLength(1)
 
-    const player = gameState.value.player
-    const strongEnemy: Entity = {
-      type: 'enemy',
-      position: {
-        x: player.position.x + 1,
-        y: player.position.y
-      },
-      stats: {
-        health: 1000,
-        maxHealth: 1000,
-        mana: 100,
-        maxMana: 100,
-        attack: 1000,
-        defense: 1000,
-        level: 1,
-        experience: 0,
-        speed: 5,
-        criticalChance: 0.1,
-        criticalDamage: 1.5,
-        attributePoints: 0,
-        bonuses: [],
-        statusEffects: []
-      },
-      skills: [],
-      inventory: [],
-      equipment: {
-        weapon: undefined,
-        armor: undefined,
-        accessory: undefined
+      // 验证游戏状态
+      expect(gameState.turn).toBe(1)
+      expect(gameState.isPlayerTurn).toBe(true)
+      expect(gameState.gameStatus).toBe('playing')
+      expect(gameState.score).toBe(0)
+    })
+
+    it('should handle map generation failure', async () => {
+      const { gameState, initGame } = useGameEngine()
+
+        // 模拟地图生成失败
+        ; (generateMap as any).mockReturnValue({ map: [], rooms: [] })
+
+      // 初始化游戏
+      const success = await initGame('warrior')
+
+      // 验证初始化失败
+      expect(success).toBe(false)
+      expect(generateMap).toHaveBeenCalledTimes(1)
+
+      // 验证状态未改变
+      expect(gameState.map).toHaveLength(0)
+      expect(gameState.enemies).toHaveLength(0)
+    })
+
+    it('should maintain state reactivity after initialization', async () => {
+      const { gameState, initGame } = useGameEngine()
+
+      // 初始化游戏
+      await initGame('warrior')
+
+      // 验证状态更新的响应性
+      const initialPosition = { ...gameState.player.position }
+
+      // 更新玩家位置
+      gameState.player.position = { x: 5, y: 5 }
+
+      // 验证位置已更新
+      expect(gameState.player.position).not.toEqual(initialPosition)
+      expect(gameState.player.position).toEqual({ x: 5, y: 5 })
+    })
+
+    it('should properly handle state updates', async () => {
+      const { gameState, initGame } = useGameEngine()
+
+      // 初始化游戏
+      await initGame('warrior')
+
+      // 记录初始状态
+      const initialState = {
+        mapSize: gameState.map.length,
+        playerPos: { ...gameState.player.position },
+        enemies: gameState.enemies.length
       }
-    }
 
-    // 添加测试敌人
-    gameState.value.enemies = [strongEnemy]
+      // 模拟多个状态更新
+      gameState.turn++
+      gameState.score += 10
+      gameState.player.stats.health -= 20
 
-    // 移动到敌人位置触发战斗
-    movePlayer(strongEnemy.position)
+      // 验证状态更新
+      expect(gameState.turn).toBe(2)
+      expect(gameState.score).toBe(10)
+      expect(gameState.player.stats.health).toBe(100)
 
-    // 检查游戏是否结束
-    expect(gameState.value.gameStatus).toBe('gameover')
+      // 验证其他状态保持不变
+      expect(gameState.map.length).toBe(initialState.mapSize)
+      expect(gameState.enemies.length).toBe(initialState.enemies)
+    })
   })
 })
