@@ -20,48 +20,47 @@ interface GameState {
   messages: string[]
 }
 
-type GameStateKey = keyof GameState
+// 将状态提升到模块级别
+const gameState = reactive<GameState>({
+  player: {
+    type: 'player',
+    position: { x: 0, y: 0 },
+    stats: {
+      health: 120,
+      maxHealth: 120,
+      mana: 100,
+      maxMana: 100,
+      attack: 10,
+      defense: 5,
+      level: 1,
+      experience: 0,
+      speed: 5,
+      criticalChance: 0.1,
+      criticalDamage: 1.5,
+      attributePoints: 0,
+      bonuses: [],
+      statusEffects: []
+    },
+    skills: [],
+    inventory: [],
+    equipment: {
+      weapon: undefined,
+      armor: undefined,
+      accessory: undefined
+    }
+  },
+  enemies: [],
+  map: [],
+  turn: 1,
+  isPlayerTurn: true,
+  gameStatus: 'playing',
+  score: 0,
+  messages: ['Welcome to the game!']
+})
+
+const hasSaveData = ref(false)
 
 export function useGameEngine() {
-  const gameState = reactive<GameState>({
-    player: {
-      type: 'player',
-      position: { x: 0, y: 0 },
-      stats: {
-        health: 120,
-        maxHealth: 120,
-        mana: 100,
-        maxMana: 100,
-        attack: 10,
-        defense: 5,
-        level: 1,
-        experience: 0,
-        speed: 5,
-        criticalChance: 0.1,
-        criticalDamage: 1.5,
-        attributePoints: 0,
-        bonuses: [],
-        statusEffects: []
-      },
-      skills: [],
-      inventory: [],
-      equipment: {
-        weapon: undefined,
-        armor: undefined,
-        accessory: undefined
-      }
-    },
-    enemies: [],
-    map: [],
-    turn: 1,
-    isPlayerTurn: true,
-    gameStatus: 'playing',
-    score: 0,
-    messages: ['Welcome to the game!']
-  })
-
-  const hasSaveData = ref(false)
-
   function loadGame(): boolean {
     const savedData = localStorage.getItem('gameState')
     if (savedData) {
